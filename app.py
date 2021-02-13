@@ -11,21 +11,16 @@ q = Queue(connection=conn)
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
-    errors = []
-    results = {}
-    if request.method == "POST":
-        try:
-            url = request.form['url']
-            r = requests.get(url)
-            print(r.text)
-        except:
-            errors.append(
-                "Unable to get URL. Please make sure it's valid and try again."
-            )
-        
-    return render_template('index.html', errors=errors, results=results)
+    return render_template('index.html')
+
+
+
+@app.route('/run', methods=['GET', 'POST'])
+def run():
+    return render_template('run.html')
 
 
 
 if __name__ == '__main__':
     app.run()
+    
