@@ -5,19 +5,16 @@
     <div class="col-8">
         <h3> Run ConoDictor </h3>
         <br>
-        <form>
-            <div class="mb-3">
-                <label for="formFile" class="form-label">Select input fasta file</label>
-                <input class="form-control" type="file" id="formFile">
-            </div>
-            <div class="mb-3">
-                <label for="conoFormControlTextarea" class="form-label">or paste your sequence here</label>
-                <textarea class="form-control" id="conoFormControlTextarea" rows="3"></textarea>
-            </div>
-            <div class="mb-3">
-                <label for="FormControlInput" class="form-label">Get notified by email when the results are available.</label>
-                <input type="email" class="form-control" id="FormControlInput" placeholder="name@example.com">
-            </div>
+        {% from "_formhelpers.html" import render_field %}
+        <form method=post>
+            <dl>
+                {{ render_field(form.uploaded_file, class="form-control") }}
+                {{ render_field(form.uploaded_text, class="form-control") }}
+                <br>
+                <br>
+                {{ render_field(form.email, class="form-control", placeholder="name@example.com") }}
+                {{ render_field(form.job_id, class="form-control") }}
+            </dl>
             <br>
             <div class="col-12">
                 <button class="btn btn-primary" type="submit">Submit</button>
