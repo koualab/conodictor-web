@@ -1,9 +1,18 @@
 {% extends "index.html" %}
-{% block title%}404{% endblock %}
+{% block title%}Results{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
+<div class="container-fluid row justify-content-center">
     <div class="col-8">
         <h1> ConoDictor is running </h1>
+        <br>
+        <div class="card text-white bg-success">
+            <div class="card-header">Running ConoDictor...</div>
+            <div class="card-body">
+                <h5 class="card-title">Job name: {{ jobname }}</h5>
+                <p class="card-text">Your job is running. Results will be available at {{ resout }}.zip in few minutes. Please come back later.</p>
+            </div>
+        </div>
     </div>
 </div>
+
 {% endblock %}

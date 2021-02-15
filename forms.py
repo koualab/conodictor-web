@@ -1,7 +1,7 @@
 """Form object declaration."""
 from flask_wtf import FlaskForm
 from wtforms import StringField, FileField, TextAreaField
-from wtforms.validators import Email, DataRequired
+from wtforms.validators import Email, DataRequired, ValidationError
 
 import string
 import random
@@ -16,14 +16,40 @@ def jobid_generator(size=6, chars=string.ascii_uppercase + string.digits):
     return f"CONODICTOR_{rd}_{dt}"
 
 
+def validate_textarea(form, field):
+    """
+    Test sequence type
+    """
+    dna = "ATCG"
+    prot = "ABCDEFGHIKLMNPQRSTVWXYZ"
+
+    if not (
+        all(i in dna for i in field.data)
+        and all(i in prot for i in field.data)
+    ):
+        raise ValidationError(
+            "[ConoDictor input error]: Your input data should be DNA"
+            + " or proteins."
+        )
+
+
 class RunForm(FlaskForm):
     """Run ConoDictor form."""
 
     uploaded_file = FileField("Select input fasta file")
-    uploaded_text = TextAreaField("or paste your sequence here")
+    uploaded_text = TextAreaField(
+        "or paste your sequence here", [validate_textarea]
+    )
     email = StringField(
         "Get notified by email when the results are available",
-        [Email(message=("Your input email is not correct"))],
+        [
+            Email(
+                message=(
+                    "[ConoDictor input error: The provided"
+                    + " email address is not valid"
+                )
+            )
+        ],
     )
     job_id = StringField(
         "Your Job name",

@@ -7,10 +7,11 @@ class Result(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     job_name = db.Column(db.String())
     result_url = db.Column(db.String())
+    email = db.Column(db.String())
 
     def __init__(self, id, job_name, result_url):
         self.job_name = job_name
         self.result_url = result_url
 
     def __repr__(self):
-        return "<id f{self.id}>"
+        return "<id f{self.job_name}>"

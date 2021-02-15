@@ -8,7 +8,9 @@ class Config(object):
     TESTING = False
     CSRF_ENABLED = True
     SECRET_KEY = "this"
-    # SQLALCHEMY_DATABASE_URI = os.environ["DATABASE_URL"]
+    SQLALCHEMY_DATABASE_URI = (
+        "postgresql://ediman:FqHRxljLGP53@localhost:5432/webcono_dev"
+    )
 
 
 class ProductionConfig(Config):
