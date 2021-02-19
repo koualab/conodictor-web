@@ -1,6 +1,7 @@
 {% extends "index.html" %}
 {% block title%}Run{% endblock %}
 {% block content %}
+{% if request.method == "GET" %}
 <div class="container-fluid row justify-content-center">
     <div class="col-8">
         <h3> Run ConoDictor </h3>
@@ -24,9 +25,6 @@
             <dl>
                 {{ render_field(form.uploaded_file, class="form-control") }}
                 {{ render_field(form.uploaded_text, class="form-control") }}
-                <br>
-                <br>
-                {{ render_field(form.email, class="form-control", placeholder="name@example.com") }}
                 {{ render_field(form.job_id, class="form-control") }}
             </dl>
             <br>
@@ -36,4 +34,18 @@
         </form>
     </div>
 </div>
+{% else %}
+<div class="container-fluid row justify-content-center">
+    <div class="col-8">
+        <h3> ConoDictor is running </h3>
+        <br>
+        <div class="card text-white bg-success">
+            <div class="card-header">Running ConoDictor...</div>
+            <div class="card-body">
+                <h5 class="card-title">Job name: {{ session['jobname'] }}</h5>
+                <p class="card-text">Your job is running. Results will be available at {{ session['resout'] }}. Please come back later.</p>
+            </div>
+        </div>
+    </div>
+{% endif %}
 {% endblock %}

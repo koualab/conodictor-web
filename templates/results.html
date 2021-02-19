@@ -3,16 +3,15 @@
 {% block content %}
 <div class="container-fluid row justify-content-center">
     <div class="col-8">
-        <h1> ConoDictor is running </h1>
+        <h1> No job to see </h1>
         <br>
         <div class="card text-white bg-success">
-            <div class="card-header">Running ConoDictor...</div>
+            <div class="card-header"></div>
             <div class="card-body">
                 <h5 class="card-title">Job name: {{ jobname }}</h5>
-                <p class="card-text">Your job is running. Results will be available at {{ resout }}.zip in few minutes. Please come back later.</p>
+                <p class="card-text">Your job is running (Job id: {{ jobid }}). Results will be available at {{inpath}}. Please come back later.</p>
             </div>
         </div>
     </div>
 </div>
-
 {% endblock %}

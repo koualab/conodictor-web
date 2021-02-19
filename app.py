@@ -1,30 +1,41 @@
-import os
-import subprocess
+from conodictor import conodictor
 from flask import Flask, abort
 from flask import flash, request, render_template, redirect, url_for, session
-from sqlalchemy.orm.session import Session
-from werkzeug.utils import secure_filename
-from flask_sqlalchemy import SQLAlchemy
+from flask.helpers import send_from_directory
 from forms import RunForm
-import models
+import os
+from rq import Queue
+from rq.job import Job
+from werkzeug.utils import secure_filename
+from worker import conn
 
-UPLOAD_FOLDER = "./tmp"
-RESULT_FOLDER = "./res"
-ALLOWED_EXTENSIONS = {"fa", "fas", "fasta", "fna", "gz"}
+
+UPLOAD_FOLDER = "tmp"
+RESULT_FOLDER = "res"
+
+
 app = Flask(__name__)
 app.config.from_object(os.environ["APP_SETTINGS"])
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["RESULT_FOLDER"] = RESULT_FOLDER
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-db = SQLAlchemy(app)
+
+q = Queue(connection=conn)
+
+ALLOWED_EXTENSIONS = {"fa", "fas", "fasta", "fna", "gz"}
+DNA = "ATCG"
+PROTEINS = "ABCDEFGHIKLMNPQRSTVWXYZ"
 
 
 def allowed_file(filename):
-    """Function to test for allowed files."""
-
     return (
         "." in filename
         and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    )
+
+
+def allowed_text(text):
+    return all(i in DNA for i in text.upper()) or all(
+        i in PROTEINS for i in text.upper()
     )
 
 
@@ -37,47 +48,28 @@ def home():
 def run():
     form = RunForm()
 
-    if request.method == "POST":
-        if form.validate_on_submit():
-            # get file uploaded by the user
-            text = request.form["uploaded_text"]
-            infile = request.files["uploaded_file"]
-            email = request.form["email"]
-            jobname = request.form["job_id"]
+    if request.method == "POST" and form.validate():
+        file = request.files["uploaded_file"]
+        text = request.form["uploaded_text"]
+        jobname = request.form["job_id"]
 
-            if infile.filename == "" and not text:
-                flash("No selected file nor input data.")
+        # If a file is not selected for upload...
+        if file.filename == "":
+            # ...and a sequence is not also provided
+            if text == "":
+                flash("No data submitted. Please check your input.")
                 return redirect(request.url)
-
-            if infile and allowed_file(infile.filename):
-                # Upload file
-                filename = secure_filename(infile.filename)
-                path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-                infile.save(path)
-                session["path"] = path
-                session["jobname"] = jobname
-                session["resout"] = os.path.join(
-                    app.config["RESULT_FOLDER"], jobname
-                )
-                return redirect(url_for("results", jobname=jobname))
-
-            if infile and not allowed_file(infile.filename):
-                # Provided file is not supported
-                flash(
-                    f"Your provided file {infile.filename}"
-                    + " is not supported. Please provide a fasta file"
-                    + " either gzipped or not."
-                )
+            # ...and a sequence is provided but is not DNA or proteins
+            elif text != "" and not allowed_text(text):
+                flash("Input data is not DNA nor proteins.")
                 return redirect(request.url)
-
-            if text and not infile:
+            # ...and a sequence is provided and is DNA or proteins
+            elif text != "" and allowed_text(text):
                 path = os.path.join(
                     app.config["UPLOAD_FOLDER"], form.job_id.data
                 )
                 open(
-                    os.path.join(
-                        app.config["UPLOAD_FOLDER"], form.job_id.data
-                    ),
+                    path,
                     "w",
                 ).write(form.uploaded_text.data)
                 session["path"] = path
@@ -85,58 +77,97 @@ def run():
                 session["resout"] = os.path.join(
                     app.config["RESULT_FOLDER"], jobname
                 )
-                return redirect(url_for("results", jobname=jobname))
+                return render_template(
+                    "run.html",
+                    form=form,
+                    path=path,
+                    jobname=jobname,
+                    resout=session["resout"],
+                )
+        # If a file is selected for upload...
+        elif file.filename != "":
+            # ...and the filename is allowed
+            if allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                file.save(path)
 
-            if email:
-                flash("Got email")
+                session["path"] = path
+                session["jobname"] = jobname
+                session["resout"] = os.path.join(
+                    app.config["RESULT_FOLDER"], jobname
+                )
+                return render_template(
+                    "run.html",
+                    form=form,
+                    path=path,
+                    jobname=jobname,
+                    resout=session["resout"],
+                )
+            # ...and the filename is not allowed
+            else:
+                flash(
+                    "Provided file is not supported. Please select"
+                    + " a fasta file either gzipped or not."
+                )
+                return redirect(request.url)
 
-            results = [
-                jobname,
-                email,
-                os.path.join(app.config["RESULT_FOLDER"], jobname),
-            ]
-            result = models.Result(
-                job_name=results[0], email=results[1], result_url=results[2]
+    return render_template("run.html", form=form)
+
+
+@app.route("/results/jobkey", methods=["GET", "POST"])
+def results(jobkey):
+    jobname = jobkey
+    if jobname in session:
+        job = Job.fetch(jobname, connection=conn)
+        if job.is_finished:
+            return redirect(url_for("results", jobid=jobname))
+        else:
+            flash("Your job is not yet finished. Please come back later.")
+            return redirect(url_for("results"))
+    elif jobname not in session:
+        if request.method == "POST":
+            inpath = session["path"]
+            jobname = session["jobname"]
+            resout = session["resout"]
+
+            job = q.enqueue_call(
+                func=conodictor,
+                args=(
+                    inpath,
+                    resout,
+                ),
+                result_ttl=5000,
             )
-            db.session.add(result)
-            db.session.commit()
+            dpath = os.path.join(app.config["RESULT_FOLDER"], job.get_id())
+        elif request.method == "GET":
+            flash(
+                "Your jobid was not found."
+                + " Please run a job before seeing any result"
+            )
+            return redirect(url_for("results"))
+        else:
+            abort(404)
 
     return render_template(
-        "run.html",
-        form=form,
+        "results.html",
+        inpath=inpath,
+        jobname=jobname,
+        jobid=job.get_id(),
+        dpath=dpath,
     )
 
 
-@app.route("/results/<jobname>", methods=["GET", "POST"])
-def results(jobname):
+@app.route("//<jobkey>", methods=["GET"])
+def download(jobkey):
 
-    # Jobname in db. We test provided jobname against the stored jobname
-    # For returning peoples who want to have access to their old results
-    # our_jobname = Session.query(models.Result).filter_by(jobname=jobname)
+    job = Job.fetch(jobkey, connection=conn)
 
-    # Here we put the session variable in the list and also the stored jobname
-    VALID_JOBNAME = [session["jobname"]]
-    # VALID_JOBNAME.extend(our_jobname.jobname)
-
-    if jobname not in VALID_JOBNAME:
-        abort(400)
-
-    inpath = session["path"]
-    jobname = session["jobname"]
-    resout = session["resout"]
-
-    # subprocess.run(["/home/sinfo/projects/conodictor",
-    # f"-o{resout}", inpath])
-
-    return render_template(
-        "results.html", inpath=inpath, resout=resout, jobname=jobname
-    )
-
-
-@app.route("/results", methods=["GET", "POST"])
-def res_():
-    flash("Please enter data before trying to get the results")
-    return redirect(url_for("run"))
+    if job.is_finished:
+        return send_from_directory(app.config["RESULT_FOLDER"], jobkey)
+    else:
+        path = os.path.join(app.config["RESULT_FOLDER"], jobkey)
+        return redirect(url_for("results", path))
 
 
 @app.route("/contact")
