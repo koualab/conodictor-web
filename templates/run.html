@@ -40,10 +40,9 @@
         <h3> ConoDictor is running </h3>
         <br>
         <div class="card text-white bg-success">
-            <div class="card-header">Running ConoDictor...</div>
             <div class="card-body">
                 <h5 class="card-title">Job name: {{ session['jobname'] }}</h5>
-                <p class="card-text">Your job is running. Results will be available at {{ session['resout'] }}. Please come back later.</p>
+                <p class="card-text">Your job is running. Results will be available at http://127.0.0.1:5000/results/{{ session['jobname'] }}. Please come back later.</p>
             </div>
         </div>
     </div>

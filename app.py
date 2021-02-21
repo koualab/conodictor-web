@@ -1,13 +1,12 @@
 from conodictor import conodictor
-from flask import Flask, abort
+from flask import Flask
 from flask import flash, request, render_template, redirect, url_for, session
-from flask.helpers import send_from_directory
 from forms import RunForm
 import os
 from rq import Queue
 from rq.job import Job
 from werkzeug.utils import secure_filename
-from worker import conn
+from worker import redis_conn
 
 
 UPLOAD_FOLDER = "tmp"
@@ -19,7 +18,7 @@ app.config.from_object(os.environ["APP_SETTINGS"])
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["RESULT_FOLDER"] = RESULT_FOLDER
 
-q = Queue(connection=conn)
+q = Queue(connection=redis_conn)
 
 ALLOWED_EXTENSIONS = {"fa", "fas", "fasta", "fna", "gz"}
 DNA = "ATCG"
@@ -72,11 +71,16 @@ def run():
                     path,
                     "w",
                 ).write(form.uploaded_text.data)
-                session["path"] = path
                 session["jobname"] = jobname
-                session["resout"] = os.path.join(
-                    app.config["RESULT_FOLDER"], jobname
+                job = q.enqueue_call(
+                    func=conodictor,
+                    args=(
+                        path,
+                        os.path.join(app.config["RESULT_FOLDER"], jobname),
+                    ),
+                    result_ttl=5000,
                 )
+                session["jobid"] = job.get_id()
                 return render_template(
                     "run.html",
                     form=form,
@@ -92,11 +96,16 @@ def run():
                 path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
                 file.save(path)
 
-                session["path"] = path
                 session["jobname"] = jobname
-                session["resout"] = os.path.join(
-                    app.config["RESULT_FOLDER"], jobname
+                job = q.enqueue_call(
+                    func=conodictor,
+                    args=(
+                        path,
+                        os.path.join(app.config["RESULT_FOLDER"], jobname),
+                    ),
+                    result_ttl=5000,
                 )
+                session["jobid"] = job.get_id()
                 return render_template(
                     "run.html",
                     form=form,
@@ -115,59 +124,27 @@ def run():
     return render_template("run.html", form=form)
 
 
-@app.route("/results/jobkey", methods=["GET", "POST"])
-def results(jobkey):
-    jobname = jobkey
+@app.route("/results/jobname", methods=["GET", "POST"])
+def results(jobname):
     if jobname in session:
-        job = Job.fetch(jobname, connection=conn)
+        jobid = session["jobid"]
+        job = Job.fetch(jobid, connection=redis_conn)
+
         if job.is_finished:
             return redirect(url_for("results", jobid=jobname))
         else:
             flash("Your job is not yet finished. Please come back later.")
             return redirect(url_for("results"))
-    elif jobname not in session:
-        if request.method == "POST":
-            inpath = session["path"]
-            jobname = session["jobname"]
-            resout = session["resout"]
 
-            job = q.enqueue_call(
-                func=conodictor,
-                args=(
-                    inpath,
-                    resout,
-                ),
-                result_ttl=5000,
-            )
-            dpath = os.path.join(app.config["RESULT_FOLDER"], job.get_id())
-        elif request.method == "GET":
-            flash(
-                "Your jobid was not found."
-                + " Please run a job before seeing any result"
-            )
-            return redirect(url_for("results"))
-        else:
-            abort(404)
-
-    return render_template(
-        "results.html",
-        inpath=inpath,
-        jobname=jobname,
-        jobid=job.get_id(),
-        dpath=dpath,
-    )
-
-
-@app.route("//<jobkey>", methods=["GET"])
-def download(jobkey):
-
-    job = Job.fetch(jobkey, connection=conn)
-
-    if job.is_finished:
-        return send_from_directory(app.config["RESULT_FOLDER"], jobkey)
     else:
-        path = os.path.join(app.config["RESULT_FOLDER"], jobkey)
-        return redirect(url_for("results", path))
+        flash(
+            "Your jobid was not found."
+            + " Please run a job before seeing any result"
+        )
+        return render_template(
+            "run.html",
+            jobname=jobname,
+        )
 
 
 @app.route("/contact")
