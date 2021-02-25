@@ -205,42 +205,6 @@ def conodictor(infile, outdir, force=False, allres=False):
 
         return seqfam
 
-    def get_hmm_class(mydict):
-        """
-        Takes a dict: {'A': 0.023123, 'B': 0.23233} and return
-        they key of the item with the value 100 times lower than
-        any other value in dict
-        """
-        conofam = None
-        nonzerodict = {}
-
-        for key, value in mydict.items():
-            if value != 1:
-                nonzerodict[key] = value
-
-        # If dict has only one item, then returning the key of that item
-        if len(nonzerodict) == 1:
-            conofam = next(iter(nonzerodict))
-        else:
-            # Finding the two smallest values in dict value
-            two_smallest = nsmallest(2, nonzerodict.values())
-            if two_smallest[0] == 0 and two_smallest[1] == 0:
-                conofam = "UNKNOWN"
-            elif two_smallest[0] * 100 == two_smallest[1]:
-                value1 = list(mydict.keys())[
-                    list(mydict.values()).index(two_smallest[0])
-                ]
-                value2 = list(mydict.keys())[
-                    list(mydict.values()).index(two_smallest[1])
-                ]
-                conofam = f"CONFLICT {value1} and {value2}"
-            else:
-                conofam = list(mydict.keys())[
-                    list(mydict.values()).index(two_smallest[0])
-                ]
-
-        return conofam
-
     def msg(text):
         """
         Produce nice message and info output on terminal.

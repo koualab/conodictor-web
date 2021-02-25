@@ -72,15 +72,16 @@ def run():
                     "w",
                 ).write(form.uploaded_text.data)
                 session["jobname"] = jobname
-                job = q.enqueue_call(
+                job = q.enqueue(
                     func=conodictor,
                     args=(
                         path,
                         os.path.join(app.config["RESULT_FOLDER"], jobname),
                     ),
+                    job_id=jobname,
+                    job_timeout=3600,
                     result_ttl=5000,
                 )
-                session["jobid"] = job.get_id()
                 return render_template(
                     "run.html",
                     form=form,
@@ -97,15 +98,16 @@ def run():
                 file.save(path)
 
                 session["jobname"] = jobname
-                job = q.enqueue_call(
+                job = q.enqueue(
                     func=conodictor,
                     args=(
                         path,
                         os.path.join(app.config["RESULT_FOLDER"], jobname),
                     ),
+                    job_id=jobname,
+                    job_timeout=3600,
                     result_ttl=5000,
                 )
-                session["jobid"] = job.get_id()
                 return render_template(
                     "run.html",
                     form=form,
